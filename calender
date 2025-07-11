@@ -1,0 +1,128 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Zap, MapPin, Leaf, Milestone } from "lucide-react";
+import { useState, useMemo } from "react";
+
+const races = [
+  // ... (Your race data here)
+];
+
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const calculateStats = (calendar, emissionRate) => {
+  let totalDistance = 0;
+  const segments = [];
+
+  for (let i = 0; i < calendar.length - 1; i++) {
+    const from = calendar[i];
+    const to = calendar[i + 1];
+    const dist = calculateDistance(from.latitude, from.longitude, to.latitude, to.longitude);
+    totalDistance += dist;
+    segments.push({ from: from.city, to: to.city, distance: dist });
+  }
+  const totalEmissions = totalDistance * emissionRate;
+  return { totalDistance, totalEmissions, segments };
+};
+
+export default function F1CalendarOptimizer() {
+  const [calendar, setCalendar] = useState(races);
+  const [optimizedCalendar, setOptimizedCalendar] = useState(null);
+  const [emissionRate, setEmissionRate] = useState(0.6);
+  const [loading, setLoading] = useState(false);
+
+  const originalStats = useMemo(() => calculateStats(calendar, emissionRate), [calendar, emissionRate]);
+  const optimizedStats = useMemo(() => optimizedCalendar ? calculateStats(optimizedCalendar, emissionRate) : null, [optimizedCalendar, emissionRate]);
+
+  const optimizeCalendar = () => {
+    setLoading(true);
+    setTimeout(() => {
+      let unvisited = [...calendar];
+      let current = unvisited.shift();
+      const newOrder = [current];
+
+      while (unvisited.length) {
+        let nearest = unvisited.reduce((prev, curr) => {
+          const prevDist = calculateDistance(current.latitude, current.longitude, prev.latitude, prev.longitude);
+          const currDist = calculateDistance(current.latitude, current.longitude, curr.latitude, curr.longitude);
+          return currDist < prevDist ? curr : prev;
+        });
+        unvisited = unvisited.filter(r => r !== nearest);
+        current = nearest;
+        newOrder.push(current);
+      }
+
+      setOptimizedCalendar(newOrder);
+      setLoading(false);
+    }, 500);
+  };
+
+  const savings = optimizedStats ? {
+    distance: originalStats.totalDistance - optimizedStats.totalDistance,
+    emissions: originalStats.totalEmissions - optimizedStats.totalEmissions,
+    percentage: ((originalStats.totalEmissions - optimizedStats.totalEmissions) / originalStats.totalEmissions) * 100
+  } : null;
+
+  return (
+    <div className="bg-black min-h-screen text-white font-sans">
+      <header className="text-center py-10">
+        <h1 className="text-5xl font-bold uppercase tracking-wider text-red-600">F1 Calendar Optimizer</h1>
+        <p className="mt-4 text-lg max-w-2xl mx-auto">Optimize the Formula 1 calendar to reduce logistics carbon emissions and travel distances.</p>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 grid gap-10">
+        <section className="bg-gray-900 p-6 rounded-2xl shadow-lg">
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <input type="number" value={emissionRate} onChange={e => setEmissionRate(parseFloat(e.target.value) || 0)} className="rounded-lg p-2 text-black w-full md:w-60" />
+            <Button onClick={optimizeCalendar} disabled={loading} className="bg-red-600 hover:bg-red-700 text-lg font-bold">
+              <Zap className="mr-2" />
+              {loading ? 'Optimizing...' : 'Optimize Calendar'}
+            </Button>
+          </div>
+
+          {savings && (
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+              <Card><CardContent className="py-4"><Milestone className="mx-auto mb-2" />Distance Saved: <br /><span className="font-bold text-xl">{Math.round(savings.distance).toLocaleString()} km</span></CardContent></Card>
+              <Card><CardContent className="py-4"><Leaf className="mx-auto mb-2" />Emissions Saved: <br /><span className="font-bold text-xl">{Math.round(savings.emissions).toLocaleString()} kg CO₂</span></CardContent></Card>
+              <Card><CardContent className="py-4">% Reduction: <br /><span className="font-bold text-xl">{savings.percentage.toFixed(1)}%</span></CardContent></Card>
+            </div>
+          )}
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="bg-gray-800">
+            <CardContent className="p-4">
+              <h2 className="text-2xl font-bold mb-4"><MapPin className="inline-block mr-2" />Original Calendar</h2>
+              <ul className="space-y-2">
+                {calendar.map((race, idx) => <li key={idx}>{idx + 1}. {race.city} - {race.circuit_name}</li>)}
+              </ul>
+            </CardContent>
+          </Card>
+
+          {optimizedCalendar && (
+            <Card className="bg-gray-800">
+              <CardContent className="p-4">
+                <h2 className="text-2xl font-bold mb-4"><Leaf className="inline-block mr-2" />Optimized Calendar</h2>
+                <ul className="space-y-2">
+                  {optimizedCalendar.map((race, idx) => <li key={idx}>{idx + 1}. {race.city} - {race.circuit_name}</li>)}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      </main>
+
+      <footer className="text-center py-6 text-sm text-gray-400">Made for Sustainability | Inspired by Formula 1</footer>
+    </div>
+  );
+}
